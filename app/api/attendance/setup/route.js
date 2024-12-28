@@ -1,64 +1,45 @@
 import { NextResponse } from 'next/server';
+import dbConnect from '@/lib/dbConnect';
+import Setup from '@/models/Setup';
 import { getServerSession } from 'next-auth';
-import connectDB from '@/utils/database';
-import StudentCourse from '@/models/StudentCourse';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-export async function POST(request) {
+export async function GET() {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    await dbConnect();
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-    const { semester, branch, courses, schedule } = await request.json();
-
-    // Update or create student course setup with all fields
-    const studentCourse = await StudentCourse.findOneAndUpdate(
-      { userId: session.user.id },
-      {
-        userId: session.user.id,
-        semester,
-        branch,
-        courses: courses.map(course => ({
-          ...course,
-          totalClasses: course.totalClasses || 0,
-          attendedClasses: course.attendedClasses || 0
-        })),
-        schedule,
-        updatedAt: new Date()
-      },
-      { upsert: true, new: true }
-    );
-
-    return NextResponse.json({ success: true, setup: studentCourse });
+    const setup = await Setup.findOne({ userId: session.user.email });
+    return NextResponse.json({ setup });
   } catch (error) {
-    console.error('Setup error:', error);
-    return NextResponse.json(
-      { error: 'Failed to save setup' },
-      { status: 500 }
-    );
+    console.error('Setup fetch error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-export async function GET(request) {
+export async function POST(req) {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    await dbConnect();
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-    const studentCourse = await StudentCourse.findOne({
-      userId: session.user.id
-    });
-
-    return NextResponse.json({ setup: studentCourse || null });
-  } catch (error) {
-    console.error('Fetch setup error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch setup' },
-      { status: 500 }
+    const data = await req.json();
+    const setup = await Setup.findOneAndUpdate(
+      { userId: session.user.email },
+      { ...data, userId: session.user.email },
+      { upsert: true, new: true }
     );
+
+    return NextResponse.json({ setup });
+  } catch (error) {
+    console.error('Setup save error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

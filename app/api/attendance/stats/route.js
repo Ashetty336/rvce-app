@@ -1,39 +1,44 @@
 import { NextResponse } from 'next/server';
+import dbConnect from '@/lib/dbConnect';
+import Attendance from '@/models/Attendance';
 import { getServerSession } from 'next-auth';
-import connectDB from '@/utils/database';
-import StudentCourse from '@/models/StudentCourse';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-export async function GET(request) {
+export async function GET() {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    await dbConnect();
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-    const studentCourse = await StudentCourse.findOne({
-      userId: session.user.id
-    });
+    const stats = await Attendance.aggregate([
+      { $match: { userId: session.user.email } },
+      {
+        $group: {
+          _id: '$courseCode',
+          totalClasses: { $sum: 1 },
+          attendedClasses: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'present'] }, 1, 0]
+            }
+          }
+        }
+      }
+    ]);
 
-    if (!studentCourse) {
-      return NextResponse.json({ attendance: {} });
-    }
+    const formattedStats = stats.reduce((acc, stat) => ({
+      ...acc,
+      [stat._id]: {
+        totalClasses: stat.totalClasses,
+        attendedClasses: stat.attendedClasses
+      }
+    }), {});
 
-    // Calculate attendance for each course
-    const attendance = {};
-    studentCourse.courses.forEach(course => {
-      attendance[course.code] = {
-        totalClasses: course.totalClasses || 0,
-        attendedClasses: course.attendedClasses || 0
-      };
-    });
-
-    return NextResponse.json({ attendance });
+    return NextResponse.json(formattedStats);
   } catch (error) {
-    console.error('Fetch stats error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch attendance stats' },
-      { status: 500 }
-    );
+    console.error('Stats fetch error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

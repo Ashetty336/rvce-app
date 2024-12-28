@@ -15,7 +15,7 @@ export default function Registration() {
   const handleScheduleComplete = async (schedule) => {
     try {
       // Save the complete setup
-      const response = await fetch('/api/attendance/setup', {
+      const response = await fetch('../../../../api/attendance/setup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
