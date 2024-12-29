@@ -1,9 +1,9 @@
-import connectDB from './database';
+import dbConnect from '@/lib/dbConnect';
 import Course from '@/models/Course';
 import StudentCourse from '@/models/StudentCourse';
 
 export async function getCoursesBySemesterAndBranch(semester, branch) {
-  await connectDB();
+  await dbConnect();
   return Course.find({
     semester,
     $or: [
@@ -14,14 +14,14 @@ export async function getCoursesBySemesterAndBranch(semester, branch) {
 }
 
 export async function getStudentAttendance(userId) {
-  await connectDB();
+  await dbConnect();
   return StudentCourse.findOne({ userId })
     .populate('courses.courseId')
     .lean();
 }
 
 export async function updateBulkAttendance(userId, courseId, attendanceRecords) {
-  await connectDB();
+  await dbConnect();
   const studentCourse = await StudentCourse.findOne({
     userId,
     'courses.courseId': courseId

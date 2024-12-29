@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import connectDB from '@/utils/database';
+import dbConnect from '@/lib/dbConnect';
 import User from '@/models/User';
 
 export async function POST(request) {
@@ -8,7 +8,7 @@ export async function POST(request) {
   try {
     // Connect to database first
     try {
-      await connectDB();
+      await dbConnect();
       console.log('Database connection successful');
     } catch (dbError) {
       console.error('Detailed database connection error:', {

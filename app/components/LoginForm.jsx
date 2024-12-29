@@ -12,18 +12,23 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      console.log('Attempting login with:', { username }); // Debug log
       const result = await signIn('credentials', {
         username,
         password,
         redirect: false,
       });
 
-      if (result.error) {
+      console.log('Login result:', result); // Debug log
+
+      if (result?.error) {
         setError('Invalid credentials');
       } else {
         router.push('/dashboard');
+        router.refresh();
       }
     } catch (error) {
+      console.error('Login error:', error);
       setError('An error occurred during login');
     }
   };
@@ -59,4 +64,4 @@ export default function LoginForm() {
       </button>
     </form>
   );
-} 
+}
