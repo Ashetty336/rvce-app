@@ -1,33 +1,77 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+
+const courseSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  type: {
+    type: String,
+    enum: ['theory', 'lab'],
+    default: 'theory',
+    required: true
+  }
+}, { 
+  _id: false, 
+  strict: true,
+  minimize: false 
+});
+
+const attendanceSetupSchema = new mongoose.Schema({
+  branch: String,
+  semester: String,
+  courses: {
+    type: [courseSchema],
+    default: [],
+    required: true
+  },
+  schedule: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  }
+}, { 
+  _id: false, 
+  strict: true,
+  minimize: false 
+});
 
 const userSchema = new mongoose.Schema({
-  username: {
+  email: {
     type: String,
     required: true,
     unique: true
   },
-  email: {
+  username: {
     type: String,
     required: true,
-    unique: true,
-    validate: {
-      validator: function(v) {
-        return /^[a-zA-Z0-9.]+\.(?:is|cs|ec|me)[0-9]{2}@rvce\.edu\.in$/.test(v);
-      },
-      message: 'Please enter a valid RVCE email address'
-    }
+    trim: true
   },
   password: {
     type: String,
     required: true
-  }
-}, { timestamps: true });
+  },
+  name: String,
+  image: String,
+  attendanceSetups: [attendanceSetupSchema],
+  attendance: [{
+    semester: String,
+    courseName: String,
+    totalClasses: Number,
+    attendedClasses: Number,
+    date: Date
+  }]
+}, { 
+  strict: true,
+  timestamps: true 
+});
 
-// Hash password before saving
+// Add password hashing middleware
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
+  if (this.isModified('password')) {
+    const bcrypt = require('bcrypt');
+    this.password = await bcrypt.hash(this.password, 10);
+  }
   next();
 });
 

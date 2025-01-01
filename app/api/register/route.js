@@ -1,64 +1,48 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import User from '@/models/User';
+import bcrypt from 'bcrypt';
 
 export async function POST(request) {
-  console.log('Starting registration process...');
-
   try {
-    // Connect to database first
-    try {
-      await dbConnect();
-      console.log('Database connection successful');
-    } catch (dbError) {
-      console.error('Detailed database connection error:', {
-        name: dbError.name,
-        message: dbError.message,
-        code: dbError.code
-      });
-      return NextResponse.json(
-        { 
-          error: 'Database connection failed',
-          details: dbError.message 
-        },
-        { status: 503 }
-      );
-    }
+    await dbConnect();
 
     const body = await request.json();
-    console.log('Received registration data:', {
-      username: body.username,
-      email: body.email,
-      hasPassword: !!body.password
-    });
-
     const { username, email, password } = body;
 
-    if (!username || !email || !password) {
+    // Validate input
+    if (!username?.trim() || !email?.trim() || !password) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    // Check for existing user
     const existingUser = await User.findOne({
-      $or: [{ username }, { email }]
+      $or: [{ email }, { username }]
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Username or email already exists' },
+        { error: existingUser.email === email ? 'Email already registered' : 'Username already taken' },
         { status: 400 }
       );
     }
 
+    // Create new user (password will be hashed by the pre-save middleware)
     const user = await User.create({
-      username,
-      email,
-      password
+      username: username.trim(),
+      email: email.trim().toLowerCase(),
+      password, // No manual hashing here
+      attendanceSetups: [{
+        branch: '',
+        semester: '',
+        courses: [],
+        schedule: {}
+      }],
+      attendance: []
     });
-
-    console.log('User created successfully:', user.username);
 
     return NextResponse.json(
       {
@@ -73,14 +57,10 @@ export async function POST(request) {
     );
 
   } catch (error) {
-    console.error('Registration error:', {
-      name: error.name,
-      message: error.message,
-      code: error.code
-    });
+    console.error('Registration error:', error);
     return NextResponse.json(
       { 
-        error: 'Internal server error',
+        error: 'Registration failed',
         details: error.message 
       },
       { status: 500 }

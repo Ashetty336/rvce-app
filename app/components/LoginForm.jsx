@@ -4,7 +4,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginForm() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
@@ -12,14 +12,11 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      console.log('Attempting login with:', { username }); // Debug log
       const result = await signIn('credentials', {
-        username,
+        email,
         password,
         redirect: false,
       });
-
-      console.log('Login result:', result); // Debug log
 
       if (result?.error) {
         setError('Invalid credentials');
@@ -37,10 +34,10 @@ export default function LoginForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          type="email"
+          placeholder="RVCE Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="w-full p-2 border rounded"
           required
         />
