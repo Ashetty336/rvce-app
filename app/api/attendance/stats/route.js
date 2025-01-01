@@ -1,44 +1,42 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import Attendance from '@/models/Attendance';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import dbConnect from '@/lib/dbConnect';
+import User from '@/models/User';
 
 export async function GET() {
   try {
-    await dbConnect();
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const stats = await Attendance.aggregate([
-      { $match: { userId: session.user.email } },
-      {
-        $group: {
-          _id: '$courseCode',
-          totalClasses: { $sum: 1 },
-          attendedClasses: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'present'] }, 1, 0]
-            }
-          }
-        }
-      }
-    ]);
+    await dbConnect();
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
 
-    const formattedStats = stats.reduce((acc, stat) => ({
-      ...acc,
-      [stat._id]: {
-        totalClasses: stat.totalClasses,
-        attendedClasses: stat.attendedClasses
-      }
-    }), {});
+    // Get current semester from setup
+    const currentSemester = user.attendanceSetups?.[0]?.semester;
 
-    return NextResponse.json(formattedStats);
+    // Process attendance records into stats by course
+    const stats = user.attendance.reduce((acc, record) => {
+      if (record.semester !== currentSemester) return acc;
+
+      if (!acc[record.courseName]) {
+        acc[record.courseName] = {
+          totalClasses: record.totalClasses || 0,
+          attendedClasses: record.attendedClasses || 0
+        };
+      }
+
+      return acc;
+    }, {});
+
+    return NextResponse.json(stats);
   } catch (error) {
     console.error('Stats fetch error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

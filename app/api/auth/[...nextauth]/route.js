@@ -7,36 +7,42 @@ import User from '@/models/User';
 export const authOptions = {
   providers: [
     CredentialsProvider({
-      name: 'Credentials',
+      name: 'credentials',
       credentials: {
-        username: { label: "Username", type: "text" },
+        email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) {
-          return null;
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Please provide email and password");
         }
 
-        await dbConnect();
-        const user = await User.findOne({ username: credentials.username });
+        try {
+          await dbConnect();
+          
+          const user = await User.findOne({ email: credentials.email });
+          if (!user) {
+            console.log("No user found with email:", credentials.email);
+            throw new Error("Invalid credentials");
+          }
 
-        if (!user) {
-          console.log('User not found:', credentials.username);
-          return null;
+          console.log("Comparing passwords for user:", user.email);
+          const isValid = await bcrypt.compare(credentials.password, user.password);
+          console.log("Password comparison result:", isValid);
+          
+          if (!isValid) {
+            throw new Error("Invalid credentials");
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name || user.username
+          };
+        } catch (error) {
+          console.error("Auth error:", error);
+          throw error;
         }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isPasswordValid) {
-          console.log('Invalid password for user:', credentials.username);
-          return null;
-        }
-
-        return {
-          id: user._id.toString(),
-          username: user.username,
-          email: user.email
-        };
       }
     })
   ],
@@ -44,7 +50,6 @@ export const authOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.username = user.username;
         token.email = user.email;
       }
       return token;
@@ -52,19 +57,20 @@ export const authOptions = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;
-        session.user.username = token.username;
         session.user.email = token.email;
       }
       return session;
     }
   },
-  session: {
-    strategy: 'jwt'
-  },
   pages: {
-    signIn: '/login'
+    signIn: '/login',
   },
-  debug: process.env.NODE_ENV === 'development'
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development',
 };
 
 const handler = NextAuth(authOptions);

@@ -1,21 +1,15 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
-export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {}, onComplete }) {
+export default function WeeklyScheduleSetup({ courses = [], onComplete = () => {}, existingSchedule = {} }) {
   const [currentDay, setCurrentDay] = useState('Monday');
   const [schedule, setSchedule] = useState(existingSchedule);
+  const [error, setError] = useState('');
 
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  useEffect(() => {
-    if (existingSchedule && Object.keys(existingSchedule).length > 0) {
-      setSchedule(existingSchedule);
-    }
-  }, [existingSchedule]);
-
   const addCourseToDay = (courseName) => {
-    // Prevent adding if already in schedule for this day
     if (schedule[currentDay]?.includes(courseName)) {
       return;
     }
@@ -24,6 +18,7 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
       ...prev,
       [currentDay]: [...(prev[currentDay] || []), courseName]
     }));
+    setError(''); // Clear any existing errors
   };
 
   const removeCourseFromDay = (courseName, day) => {
@@ -33,24 +28,56 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
     }));
   };
 
-  const handleSubmit = () => {
-    const hasSchedule = Object.values(schedule).some(day => day.length > 0);
-    if (!hasSchedule) {
-      alert('Please add at least one course to your schedule');
-      return;
+  const handleSubmit = async () => {
+    try {
+      const hasSchedule = Object.values(schedule).some(day => day.length > 0);
+      if (!hasSchedule) {
+        setError('Please add at least one course to your schedule');
+        return;
+      }
+
+      // Save schedule to backend with the expected format
+      const response = await fetch('/api/attendance/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schedule: schedule,
+          type: 'schedule-setup'
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to save schedule');
+      }
+
+      // Call onComplete with the schedule data
+      if (typeof onComplete === 'function') {
+        onComplete(schedule);
+      }
+
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      setError(error.message || 'Failed to save schedule. Please try again.');
     }
-    onComplete(schedule);
   };
 
   return (
     <div className="max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6">
       <h2 className="text-2xl font-bold text-white mb-6">Set Up Weekly Schedule</h2>
+      
+      {error && (
+        <div className="bg-red-500/10 text-red-400 p-4 rounded-lg mb-6">
+          {error}
+        </div>
+      )}
 
       {/* Day Selection */}
       <div className="flex space-x-1 bg-gray-700 p-1 rounded-lg mb-6">
-        {DAYS.map((day, index) => (
+        {DAYS.map(day => (
           <button
-            key={`day-${index}-${day}`}
+            key={day}
             onClick={() => setCurrentDay(day)}
             className={`flex-1 py-2 rounded-md transition-colors ${
               currentDay === day
@@ -67,11 +94,11 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
       <div className="mb-8">
         <h3 className="text-lg font-medium text-white mb-4">Available Courses</h3>
         <div className="grid gap-4">
-          {courses.map((course, index) => {
+          {courses.map(course => {
             const isAdded = schedule[currentDay]?.includes(course.name);
             return (
               <div 
-                key={`course-${index}-${course.name}`}
+                key={course.name}
                 className="bg-gray-700 p-4 rounded-lg flex justify-between items-center"
               >
                 <div>
@@ -99,9 +126,9 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
       <div className="mb-6">
         <h3 className="text-lg font-medium text-white mb-4">Weekly Overview</h3>
         <div className="grid gap-4">
-          {DAYS.map((day, dayIndex) => (
+          {DAYS.map(day => (
             <div
-              key={`overview-${dayIndex}-${day}`}
+              key={day}
               className={`bg-gray-700 rounded-lg p-4 ${
                 currentDay === day ? 'ring-2 ring-purple-500' : ''
               }`}
@@ -109,11 +136,11 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
               <h4 className="font-medium text-white mb-2">{day}</h4>
               {(schedule[day] || []).length > 0 ? (
                 <div className="space-y-2">
-                  {schedule[day].map((courseName, courseIndex) => {
+                  {schedule[day].map(courseName => {
                     const course = courses.find(c => c.name === courseName);
                     return course && (
                       <div
-                        key={`${day}-${courseName}-${courseIndex}`}
+                        key={`${day}-${courseName}`}
                         className="flex justify-between items-center text-gray-300"
                       >
                         <div>
@@ -138,12 +165,15 @@ export default function WeeklyScheduleSetup({ courses = [], existingSchedule = {
         </div>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-lg transition-colors"
-      >
-        Complete Setup
-      </button>
+      {/* Submit Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleSubmit}
+          className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          Save Schedule
+        </button>
+      </div>
     </div>
   );
 }

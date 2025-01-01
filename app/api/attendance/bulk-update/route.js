@@ -1,46 +1,52 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import connectDB from '@/utils/database';
-import StudentCourse from '@/models/StudentCourse';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import dbConnect from '@/lib/dbConnect';
+import User from '@/models/User';
 
 export async function POST(request) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-    const { updates } = await request.json();
+    const { courseData, branch, semester } = await request.json();
+    await dbConnect();
 
-    const studentCourse = await StudentCourse.findOne({
-      userId: session.user.id
-    });
-
-    if (!studentCourse) {
-      return NextResponse.json(
-        { error: 'No course setup found' },
-        { status: 404 }
-      );
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Update each course's attendance
-    Object.entries(updates).forEach(([courseCode, data]) => {
-      const course = studentCourse.courses.find(c => c.code === courseCode);
-      if (course) {
-        course.totalClasses = data.totalClasses;
-        course.attendedClasses = data.attendedClasses;
+    // Update attendance records for each course
+    for (const [courseName, data] of Object.entries(courseData)) {
+      const totalClasses = parseInt(data.totalClasses) || 0;
+      const attendedClasses = parseInt(data.attendedClasses) || 0;
+
+      // Create or update attendance record
+      const existingRecord = user.attendance.find(
+        record => record.courseName === courseName && record.semester === semester
+      );
+
+      if (existingRecord) {
+        existingRecord.totalClasses = totalClasses;
+        existingRecord.attendedClasses = attendedClasses;
+      } else {
+        user.attendance.push({
+          courseName,
+          semester,
+          totalClasses,
+          attendedClasses,
+          date: new Date()
+        });
       }
-    });
+    }
 
-    await studentCourse.save();
-
+    await user.save();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Bulk update error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update attendance' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-} 
+}

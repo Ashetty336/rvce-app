@@ -1,147 +1,115 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import SemesterSetup from '../../components/attendance/SemesterSetup';
-import CourseInput from '../../components/attendance/CourseInput';
+import CourseManager from '../../components/attendance/CourseManager';
 import WeeklyScheduleSetup from '../../components/attendance/WeeklyScheduleSetup';
-import DailyAttendance from '../../components/attendance/DailyAttendance';
+import AttendanceTabs from '../../components/attendance/AttendanceTabs';
 
 export default function AttendancePage() {
-  const router = useRouter();
-  const { data: session } = useSession();
-  const [setupData, setSetupData] = useState(null);
+  const [step, setStep] = useState('initial-setup');
+  const [setupData, setSetupData] = useState({
+    branch: '',
+    semester: '',
+    courses: [],
+    schedule: {}
+  });
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState('checking');
+  const { data: session, status } = useSession();
 
+  // Check if user has existing setup
   useEffect(() => {
-    const fetchSetup = async () => {
+    if (status !== 'authenticated') return;
+    
+    const fetchSetupData = async () => {
       try {
         const response = await fetch('/api/attendance/setup');
         const data = await response.json();
-        
+
         if (data.setup) {
           setSetupData(data.setup);
           setStep('attendance');
         } else {
-          setStep('semester');
+          setStep('branch-setup');
         }
       } catch (error) {
-        console.error('Error fetching setup:', error);
+        console.error('Error:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    if (session) {
-      fetchSetup();
-    }
-  }, [session]);
+    fetchSetupData();
+  }, [status]);
 
-  const handleSemesterComplete = async (semesterData) => {
+  const handleSetupUpdate = async (data) => {
     try {
       const response = await fetch('/api/attendance/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...setupData,
-          ...semesterData
-        }),
+          ...data
+        })
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSetupData(data.setup);
-        setStep('courses');
-      }
+      
+      if (!response.ok) throw new Error('Setup failed');
+      
+      const result = await response.json();
+      setSetupData(prev => ({
+        ...prev,
+        ...result.setup
+      }));
     } catch (error) {
-      console.error('Error saving semester data:', error);
-    }
-  };
-
-  const handleCoursesComplete = async (courses) => {
-    try {
-      const response = await fetch('/api/attendance/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...setupData,
-          courses
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSetupData(data.setup);
-        setStep('schedule');
-      }
-    } catch (error) {
-      console.error('Error saving courses:', error);
-    }
-  };
-
-  const handleScheduleComplete = async (schedule) => {
-    try {
-      const response = await fetch('/api/attendance/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...setupData,
-          schedule,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSetupData(data.setup);
-        setStep('attendance');
-        router.refresh();
-      }
-    } catch (error) {
-      console.error('Error saving schedule:', error);
+      console.error('Error:', error);
+      alert('Setup failed. Please try again.');
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500" />
-      </div>
-    );
+    return <div>Loading...</div>;
   }
 
-  return (
-    <div className="space-y-6">
-      {step === 'semester' && (
-        <SemesterSetup 
-          onComplete={handleSemesterComplete}
-          initialData={setupData}
-        />
-      )}
-      
-      {step === 'courses' && (
-        <CourseInput 
-          existingCourses={setupData?.courses} 
-          onComplete={handleCoursesComplete}
-        />
-      )}
-      
-      {step === 'schedule' && (
-        <WeeklyScheduleSetup 
-          courses={setupData?.courses || []}
-          existingSchedule={setupData?.schedule}
-          onComplete={handleScheduleComplete}
-        />
-      )}
-      
-      {step === 'attendance' && (
-        <DailyAttendance 
-          courses={setupData?.courses || []}
-          schedule={setupData?.schedule || {}}
-          onEditCourses={() => setStep('courses')}
-          onEditSchedule={() => setStep('schedule')}
-        />
-      )}
-    </div>
-  );
-} 
+  // Only render the setup steps or attendance tabs, not both
+    // Only render the setup steps or attendance tabs, not both
+    return (
+      <div className="container mx-auto px-4 py-8">
+        {step !== 'attendance' ? (
+          <>
+            {step === 'branch-setup' && (
+              <SemesterSetup
+                onComplete={(data) => {
+                  handleSetupUpdate(data);
+                  setStep('course-setup');
+                }}
+              />
+            )}
+            {step === 'course-setup' && (
+              <CourseManager
+                onComplete={(courses) => {
+                  handleSetupUpdate({ courses });
+                  setStep('schedule-setup');
+                }}
+              />
+            )}
+            {step === 'schedule-setup' && (
+              <WeeklyScheduleSetup
+                courses={setupData.courses}
+                onComplete={(schedule) => {
+                  handleSetupUpdate({ schedule });
+                  setStep('attendance');
+                }}
+              />
+            )}
+          </>
+        ) : (
+          <AttendanceTabs
+            courses={setupData.courses}
+            schedule={setupData.schedule}
+            branch={setupData.branch}
+            semester={setupData.semester}
+          />
+        )}
+      </div>
+    );
+}
