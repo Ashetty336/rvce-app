@@ -3,16 +3,36 @@ import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
 import DashboardLayout from '../components/DashboardLayout';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import LoadingScreen from '../components/LoadingScreen';
+
+function Background() {
+  return (
+    <div className="fixed inset-0 -z-10 bg-black">
+      {/* Black background */}
+    </div>
+  );
+}
 
 function FeatureCard({ title, description, icon, href }) {
   return (
-    <Link href={href}>
-      <div className="bg-gray-800 p-6 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer border border-gray-700 hover:border-purple-500">
-        <div className="text-3xl mb-4">{icon}</div>
-        <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
-        <p className="text-gray-400">{description}</p>
-      </div>
-    </Link>
+    <motion.div
+      whileHover={{ scale: 1.02, y: -5 }}
+      whileTap={{ scale: 0.98 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Link href={href}>
+        <div className="p-6 rounded-lg bg-gray-900/50 backdrop-blur-sm hover:bg-gray-800/50 transition-all duration-300 border border-gray-700/50">
+          <div className="text-3xl mb-4 text-white">
+            {icon}
+          </div>
+          <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
+          <p className="text-gray-300">{description}</p>
+        </div>
+      </Link>
+    </motion.div>
   );
 }
 
@@ -20,7 +40,7 @@ export default function Dashboard() {
   const { data: session, status } = useSession();
 
   if (status === "loading") {
-    return <div>Loading...</div>;
+    return <LoadingScreen />;
   }
 
   if (!session) {
@@ -29,13 +49,26 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Welcome, {session.user.username}</h1>
-          <p className="text-gray-400">Access your student portal features below</p>
-        </div>
+      <Background />
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="p-6 max-w-7xl mx-auto relative z-10"
+      >
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-12 text-center"
+        >
+          <h1 className="text-6xl font-bold text-white mb-4 tracking-tight">
+            Welcome, {session.user.username}
+          </h1>
+          <p className="text-gray-300 text-xl">Access your student portal features below</p>
+        </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <FeatureCard 
             title="Attendance & Registration"
             description="View attendance, register for courses, and check your schedule"
@@ -61,21 +94,7 @@ export default function Dashboard() {
             href="/dashboard/links"
           />
         </div>
-      </div>
+      </motion.div>
     </DashboardLayout>
   );
 }
-
-function QuickLink({ title, icon, href }) {
-  return (
-    <a 
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
-    >
-      <span className="text-xl mr-2">{icon}</span>
-      <span className="text-sm text-gray-200">{title}</span>
-    </a>
-  );
-} 
